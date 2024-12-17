@@ -43,8 +43,8 @@ if(isMainThread) {
       for (const secret_name of SECRETS_LIST) {
         try {
           let secret = await client.getSecret(secret_name);
-          //set secret to process.env
-          process.env[secret.name] = secret.value;
+          //set secret to process.env.  Because Azure KV does not support underscores, we put the secret names with dashes.  On retrieval we replace dashes with underscore
+          process.env[secret.name.replace(/-/g, '_')] = secret.value;
         } catch (error) {
           console.warn(error.message);
         }
@@ -53,8 +53,8 @@ if(isMainThread) {
       //if there is no predefined list of secrets iterate all secrets in vault
       for await (let secretProperties of client.listPropertiesOfSecrets()) {
         let secret = await client.getSecret(secretProperties.name);
-        //set secret to process.env
-        process.env[secret.name] = secret.value;
+        //set secret to process.env. Because Azure KV does not support underscores, we put the secret names with dashes.  On retrieval we replace dashes with underscore
+        process.env[secret.name.replace(/-/g, '_')] = secret.value;
       }
     }
 
