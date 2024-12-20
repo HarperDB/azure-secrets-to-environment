@@ -1,6 +1,6 @@
 {
   "type": "module",
-  "name": "secrets-to-environment",
+  "name": "azure-secrets-to-environment",
   "version": "0.1.0",
   "description": "This project accesses a secrets key vault and assigns the keys to environment variables.",
   "main": "index.js",
@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/HarperDB/secrets-to-environment.git"
+    "url": "git+https://github.com/HarperDB/azure-secrets-to-environment.git"
   },
   "keywords": [
     "HarperDB",
@@ -20,12 +20,11 @@
   "author": "HarperDB, Inc.",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/HarperDB/secrets-to-environment/issues"
+    "url": "https://github.com/HarperDB/azure-secrets-to-environment/issues"
   },
-  "homepage": "https://github.com/HarperDB/secrets-to-environment#readme",
+  "homepage": "https://github.com/HarperDB/azure-secrets-to-environment#readme",
   "dependencies": {
     "@azure/identity": "^4.5.0",
-    "@azure/keyvault-keys": "^4.9.0",
     "@azure/keyvault-secrets": "^4.9.0"
   }
 }
