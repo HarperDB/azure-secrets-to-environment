@@ -2,7 +2,7 @@
   "type": "module",
   "name": "azure-secrets-to-environment",
   "version": "0.1.0",
-  "description": "This project accesses a secrets key vault and assigns the keys to environment variables.",
+  "description": "This project accesses an Azure key vault and assigns the secrets to environment variables.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
