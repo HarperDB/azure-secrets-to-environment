@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "@harperdb/azure-secrets-to-environment",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "This project accesses an Azure key vault and assigns the secrets to environment variables.",
   "main": "index.js",
   "scripts": {
