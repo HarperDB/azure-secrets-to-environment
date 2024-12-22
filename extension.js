@@ -64,5 +64,5 @@ if(SECRETS_LIST?.length > 0) {
 }
 
 if(PRINT_ENV) {
-  console.log(envVars);
+  console.log(JSON.stringify(envVars));
 }
