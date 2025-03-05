@@ -1,17 +1,17 @@
 # Azure secrets-to-environment
-This project accesses an Azure key vault and assigns the keys to environment variables.
+This project is a [Protocol Extension](https://docs.harperdb.io/docs/developers/components/reference#protocol-extension) that accesses an Azure key vault and assigns the keys to environment variables.
 
-This project executes as a dependency in HarperDB component and needs to be the first dependency to load in order to ensure the environment variables are loaded prior to being accessed.
 ## Installation
-Go into the HarperDB application you are building and install this package and add it to the config.yaml file:
+Install this package in your Harper application: `npm install --save @harperdb/azure-secrets-to-environment`
 
-1. Install:
-`npm install --save @harperdb/azure-secrets-to-environment`
+## Configuration
 
-2. Add to config.yaml. `@harperdb/azure-secrets-to-environment` must be the first dependency listed:
+After installation, add the extension (`@harperdb/azure-secrets-to-environment`) into your application's `config.yaml` file.
+This component must be listed above the component that will access the environment variables:
 ```
 '@harperdb/azure-secrets-to-environment':
   package: '@harperdb/azure-secrets-to-environment'
+  vaultMapPath: '/path/to/vault_map.json' # path to vault map
 '@harperdb/http-router':
   package: '@harperdb/http-router'
   files: '*.*js' # to load the routes.js and config files
@@ -20,9 +20,43 @@ Go into the HarperDB application you are building and install this package and a
   files: '/*'
 ```
 
+### Options
 
-## Environment variables
+`vaultMapPath` - (optional) The path to your [vault map](#vault-map) file
+
+### Environment variables
 This project relies on environment variables to properly access the desired Azure key vault.  Please note this project relies on an Azure application registration for credentials.
+
+#### From 1.2.0 on
+
+* AZURE_VAULT_NAME - (required) Name of the Azure Key Vault holding the secrets
+* AZURE_TENANT_ID - (required if vault map not provided) Tenant ID of the Azure Subscription
+* AZURE_CLIENT_ID - (required if vault map not provided) Client ID of the application registration
+* AZURE_CLIENT_SECRET - (required if vault map not provided) Client Secret of the application registration
+* SECRETS_LIST - (optional) Comma seperated list of secrets to access from the vault
+
+##### Vault Map
+
+In order to support cases where users want to load vaults dynamically (per worker start) and we don't want to expose vault credentials,
+we will create a vault map file that has the following structure:
+
+```
+{
+  ...
+  "AZURE_VAULT_NAME": {
+    "AZURE_TENANT_ID": "AZURE_TENANT_ID",
+    "AZURE_CLIENT_ID": "AZURE_CLIENT_ID",
+    "AZURE_CLIENT_SECRET": "AZURE_CLIENT_SECRET"
+  },
+  ...
+}
+```
+
+The path to this file must then be set as an option in the `config.yaml` file as `vaultMapPath`.
+
+You can still provide all the below variables and expect backward-compatible behavior.
+
+#### Before 1.2.0
 
 * AZURE_VAULT_NAME - (required) Name of the Azure Key Vault holding the secrets
 * AZURE_TENANT_ID - (required) Tenant ID of the Azure Subscription

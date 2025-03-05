@@ -1,68 +1,106 @@
 import { ClientSecretCredential } from "@azure/identity";
 import { SecretClient } from "@azure/keyvault-secrets";
-import { appendFile, writeFile } from "node:fs/promises"
+import { readFileSync } from 'fs'
+import 'dotenv/config'
 
-const { AZURE_VAULT_NAME, AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, PRINT_ENV } = process.env;
-//comma seperated list of secrets
-const SECRETS_LIST = process.env.SECRETS_LIST?.split(',');
+const deserializeBoolean = (str) => {
+  switch (str.toLowerCase()) {
+    case 'true':
+    case '1':
+    case 'y':
+    case 't':
+      return true;
+    case 'false':
+    case '0':
+    case 'n':
+    case 'f':
+    default:
+      return false;
+  }
+}
 
 const ERROR_PREAMBLE = 'Unable to access Azure Secrets Vault due to: ';
 
-//validate that AZURE_VAULT_NAME, AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET are defined.
-if (!AZURE_VAULT_NAME) {
-  throw new Error(`${ERROR_PREAMBLE} AZURE_VAULT_NAME is required.`);
-}
+export async function start({ vaultMapPath }) {
+  let { AZURE_VAULT_NAME, AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, PRINT_ENV, SECRETS_LIST } = process.env;
 
-if (!AZURE_TENANT_ID) {
-  throw new Error(`${ERROR_PREAMBLE} AZURE_TENANT_ID is required.`);
-}
+  PRINT_ENV = PRINT_ENV ? deserializeBoolean(PRINT_ENV) : false;
+  SECRETS_LIST = SECRETS_LIST ? SECRETS_LIST.split(',') : [];
 
-if (!AZURE_CLIENT_ID) {
-  throw new Error(`${ERROR_PREAMBLE} AZURE_CLIENT_ID is required.`);
-}
+  if (!AZURE_VAULT_NAME) {
+    throw new Error(`${ERROR_PREAMBLE} AZURE_VAULT_NAME is required.`);
+  }
 
-if (!AZURE_CLIENT_SECRET) {
-  throw new Error(`${ERROR_PREAMBLE} AZURE_CLIENT_SECRET is required.`);
-}
+  if (!(AZURE_TENANT_ID && AZURE_CLIENT_ID && AZURE_CLIENT_SECRET)) {
 
-// Configure vault URL
-const vaultUrl = `https://${AZURE_VAULT_NAME}.vault.azure.net`;
+    let vaultMap = null;
 
-//Set credentials based on Service Registration
-const credential = new ClientSecretCredential(
-  AZURE_TENANT_ID,
-  AZURE_CLIENT_ID,
-  AZURE_CLIENT_SECRET,
-);
+    if (vaultMapPath) {
+      try {
+        vaultMap = JSON.parse(readFileSync(vaultMapPath, 'utf8'));
+      } catch (e) {
+        console.warn(`Unable to read vault map from "${vaultMapPath}": ${e.message
+          ? e.message
+          : e.toString()}`);
+      }
+    }
 
-// Create authenticated secret client
-const client = new SecretClient(vaultUrl, credential);
+    if (vaultMap) {
+      const vault = vaultMap[AZURE_VAULT_NAME];
+      if (vault) {
+        AZURE_TENANT_ID = vault.AZURE_TENANT_ID;
+        AZURE_CLIENT_ID = vault.AZURE_CLIENT_ID;
+        AZURE_CLIENT_SECRET = vault.AZURE_CLIENT_SECRET;
+      }
+    }
 
-let envVars = {};
+  }
 
-if(SECRETS_LIST?.length > 0) {
-  for (const secret_name of SECRETS_LIST) {
-    try {
-      let secret = await client.getSecret(secret_name);
-      //set secret to process.env.  Because Azure KV does not support underscores, we put the secret names with dashes.  On retrieval we replace dashes with underscore
+  if (!(AZURE_TENANT_ID && AZURE_CLIENT_ID && AZURE_CLIENT_SECRET)) {
+    throw new Error(`${ERROR_PREAMBLE} AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET are required.`);
+  }
+
+  // Configure vault URL
+  const vaultUrl = `https://${AZURE_VAULT_NAME}.vault.azure.net`;
+
+  //Set credentials based on Service Registration
+  const credential = new ClientSecretCredential(
+    AZURE_TENANT_ID,
+    AZURE_CLIENT_ID,
+    AZURE_CLIENT_SECRET,
+  );
+
+  // Create authenticated secret client
+  const client = new SecretClient(vaultUrl, credential);
+
+  let envVars = {};
+
+  if (SECRETS_LIST.length > 0) {
+    for (const secret_name of SECRETS_LIST) {
+      try {
+        let secret = await client.getSecret(secret_name);
+        //set secret to process.env.  Because Azure KV does not support underscores, we put the secret names with dashes.  On retrieval we replace dashes with underscore
+        const secretName = [secret.name.replace(/-/g, '_')];
+        process.env[secretName] = secret.value;
+        envVars[secretName] = secret.value;
+      } catch (error) {
+        console.warn(error.message);
+      }
+    }
+  } else {
+    //if there is no predefined list of secrets iterate all secrets in vault
+    for await (let secretProperties of client.listPropertiesOfSecrets()) {
+      let secret = await client.getSecret(secretProperties.name);
+      //set secret to process.env. Because Azure KV does not support underscores, we put the secret names with dashes.  On retrieval we replace dashes with underscore
       const secretName = [secret.name.replace(/-/g, '_')];
       process.env[secretName] = secret.value;
       envVars[secretName] = secret.value;
-    } catch (error) {
-      console.warn(error.message);
     }
   }
-} else {
-  //if there is no predefined list of secrets iterate all secrets in vault
-  for await (let secretProperties of client.listPropertiesOfSecrets()) {
-    let secret = await client.getSecret(secretProperties.name);
-    //set secret to process.env. Because Azure KV does not support underscores, we put the secret names with dashes.  On retrieval we replace dashes with underscore
-    const secretName = [secret.name.replace(/-/g, '_')];
-    process.env[secretName] = secret.value;
-    envVars[secretName] = secret.value;
-  }
-}
 
-if(PRINT_ENV) {
-  console.log(JSON.stringify(envVars));
+  if (PRINT_ENV) {
+    console.log(JSON.stringify(envVars));
+  }
+
+  return {};
 }
