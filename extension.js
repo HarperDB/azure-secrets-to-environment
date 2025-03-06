@@ -1,7 +1,6 @@
+import 'dotenv/config'
 import { ClientSecretCredential } from "@azure/identity";
 import { SecretClient } from "@azure/keyvault-secrets";
-import { readFileSync } from 'fs'
-import 'dotenv/config'
 
 const deserializeBoolean = (str) => {
   switch (str.toLowerCase()) {
@@ -21,8 +20,8 @@ const deserializeBoolean = (str) => {
 
 const ERROR_PREAMBLE = 'Unable to access Azure Secrets Vault due to: ';
 
-export async function start({ vaultMapPath }) {
-  let { AZURE_VAULT_NAME, AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, PRINT_ENV, SECRETS_LIST } = process.env;
+export async function start() {
+  let { AZURE_VAULT_NAME, AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, PRINT_ENV, SECRETS_LIST, AZURE_VAULT_MAP } = process.env;
 
   PRINT_ENV = PRINT_ENV ? deserializeBoolean(PRINT_ENV) : false;
   SECRETS_LIST = SECRETS_LIST ? SECRETS_LIST.split(',') : [];
@@ -35,11 +34,11 @@ export async function start({ vaultMapPath }) {
 
     let vaultMap = null;
 
-    if (vaultMapPath) {
+    if (AZURE_VAULT_MAP) {
       try {
-        vaultMap = JSON.parse(readFileSync(vaultMapPath, 'utf8'));
+        vaultMap = JSON.parse(AZURE_VAULT_MAP);
       } catch (e) {
-        console.warn(`Unable to read vault map from "${vaultMapPath}": ${e.message
+        console.warn(`Unable to parse AZURE_VAULT_MAP: ${e.message
           ? e.message
           : e.toString()}`);
       }

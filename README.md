@@ -11,7 +11,6 @@ This component must be listed above the component that will access the environme
 ```
 '@harperdb/azure-secrets-to-environment':
   package: '@harperdb/azure-secrets-to-environment'
-  vaultMapPath: '/path/to/vault_map.json' # path to vault map
 '@harperdb/http-router':
   package: '@harperdb/http-router'
   files: '*.*js' # to load the routes.js and config files
@@ -19,10 +18,6 @@ This component must be listed above the component that will access the environme
   package: '@harperdb/nextjs'
   files: '/*'
 ```
-
-### Options
-
-`vaultMapPath` - (optional) The path to your [vault map](#vault-map) file
 
 ### Environment variables
 This project relies on environment variables to properly access the desired Azure key vault.  Please note this project relies on an Azure application registration for credentials.
@@ -34,11 +29,12 @@ This project relies on environment variables to properly access the desired Azur
 * AZURE_CLIENT_ID - (required if vault map not provided) Client ID of the application registration
 * AZURE_CLIENT_SECRET - (required if vault map not provided) Client Secret of the application registration
 * SECRETS_LIST - (optional) Comma seperated list of secrets to access from the vault
+* AZURE_VAULT_MAP - (optional) A JSON object with multiple credentials. See [Vault Map](#vault-map)
 
 ##### Vault Map
 
 In order to support cases where users want to load vaults dynamically (per worker start) and we don't want to expose vault credentials,
-we will create a vault map file that has the following structure:
+a JSON object can be provided with following structure:
 
 ```
 {
@@ -51,8 +47,6 @@ we will create a vault map file that has the following structure:
   ...
 }
 ```
-
-The path to this file must then be set as an option in the `config.yaml` file as `vaultMapPath`.
 
 You can still provide all the below variables and expect backward-compatible behavior.
 
