@@ -1,64 +1,63 @@
-import 'dotenv/config'
+import dotenv from 'dotenv'
 import { ClientSecretCredential } from "@azure/identity";
 import { SecretClient } from "@azure/keyvault-secrets";
+import assert from 'node:assert';
 
-const deserializeBoolean = (str) => {
-  switch (str.toLowerCase()) {
-    case 'true':
-    case '1':
-    case 'y':
-    case 't':
-      return true;
-    case 'false':
-    case '0':
-    case 'n':
-    case 'f':
-    default:
-      return false;
+export async function start({ managedCredentials }) {
+  const ERROR_PREAMBLE = 'Unable to access Azure Secrets Vault due to: ';
+
+  if (!managedCredentials) {
+    assert(process.env.AZURE_VAULT_NAME, `${ERROR_PREAMBLE} AZURE_VAULT_NAME is required.`);
+    assert(process.env.AZURE_TENANT_ID, `${ERROR_PREAMBLE} AZURE_TENANT_ID is required.`);
+    assert(process.env.AZURE_CLIENT_ID, `${ERROR_PREAMBLE} AZURE_CLIENT_ID is required.`);
+    assert(process.env.AZURE_CLIENT_SECRET, `${ERROR_PREAMBLE} AZURE_CLIENT_SECRET is required.`);
+
+    await fetchAndSetSecrets(process.env);
+
+    return {};
   }
+
+  return {
+    async handleFile(contents) {
+      const { AZURE_VAULT_NAME, SECRETS_LIST } = dotenv.parse(contents);
+
+      if (!AZURE_VAULT_NAME) {
+        throw new Error(`${ERROR_PREAMBLE} AZURE_VAULT_NAME is required.`);
+      }
+
+      const vaultCreds = fetchVaultCreds(AZURE_VAULT_NAME);
+
+      if (!vaultCreds) {
+        throw new Error(`${ERROR_PREAMBLE} No credentials found for "${AZURE_VAULT_NAME}"`);
+      }
+
+      await fetchAndSetSecrets({ ...vaultCreds, AZURE_VAULT_NAME, SECRETS_LIST });
+    }
+  };
 }
 
-const ERROR_PREAMBLE = 'Unable to access Azure Secrets Vault due to: ';
+function fetchVaultCreds(vaultName) {
+  let vaultCreds;
 
-export async function start() {
-  let { AZURE_VAULT_NAME, AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, PRINT_ENV, SECRETS_LIST, AZURE_VAULT_MAP } = process.env;
-
-  PRINT_ENV = PRINT_ENV ? deserializeBoolean(PRINT_ENV) : false;
-  SECRETS_LIST = SECRETS_LIST ? SECRETS_LIST.split(',') : [];
-
-  if (!AZURE_VAULT_NAME) {
-    throw new Error(`${ERROR_PREAMBLE} AZURE_VAULT_NAME is required.`);
-  }
-
-  if (!(AZURE_TENANT_ID && AZURE_CLIENT_ID && AZURE_CLIENT_SECRET)) {
-
-    let vaultMap = null;
-
-    if (AZURE_VAULT_MAP) {
-      try {
-        vaultMap = JSON.parse(AZURE_VAULT_MAP);
-      } catch (e) {
-        console.warn(`Unable to parse AZURE_VAULT_MAP: ${e.message
-          ? e.message
-          : e.toString()}`);
-      }
+  if (process.env.AZURE_VAULT_MAP) {
+    let vaultMap;
+    try {
+      vaultMap = JSON.parse(process.env.AZURE_VAULT_MAP);
+    } catch (e) {
+      console.warn(`Unable to parse AZURE_VAULT_MAP: ${e.message
+        ? e.message
+        : e.toString()
+        }`);
     }
 
-    if (vaultMap) {
-      const vault = vaultMap[AZURE_VAULT_NAME];
-      if (vault) {
-        AZURE_TENANT_ID = vault.AZURE_TENANT_ID;
-        AZURE_CLIENT_ID = vault.AZURE_CLIENT_ID;
-        AZURE_CLIENT_SECRET = vault.AZURE_CLIENT_SECRET;
-      }
-    }
-
+    vaultCreds = vaultMap?.[vaultName];
   }
 
-  if (!(AZURE_TENANT_ID && AZURE_CLIENT_ID && AZURE_CLIENT_SECRET)) {
-    throw new Error(`${ERROR_PREAMBLE} AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET are required.`);
-  }
+  return vaultCreds
+}
 
+
+async function fetchAndSetSecrets({ AZURE_VAULT_NAME, AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, SECRETS_LIST }) {
   // Configure vault URL
   const vaultUrl = `https://${AZURE_VAULT_NAME}.vault.azure.net`;
 
@@ -72,34 +71,29 @@ export async function start() {
   // Create authenticated secret client
   const client = new SecretClient(vaultUrl, credential);
 
-  let envVars = {};
+  const secretsList = SECRETS_LIST ? SECRETS_LIST.split(',') : [];
 
-  if (SECRETS_LIST.length > 0) {
-    for (const secret_name of SECRETS_LIST) {
-      try {
-        let secret = await client.getSecret(secret_name);
-        //set secret to process.env.  Because Azure KV does not support underscores, we put the secret names with dashes.  On retrieval we replace dashes with underscore
-        const secretName = [secret.name.replace(/-/g, '_')];
-        process.env[secretName] = secret.value;
-        envVars[secretName] = secret.value;
-      } catch (error) {
-        console.warn(error.message);
-      }
-    }
+  const promises = [];
+
+  if (secretsList.length > 0) {
+    promises = secretsList.map((secretName) => fetchAndSetSecret(client, secretName));
   } else {
     //if there is no predefined list of secrets iterate all secrets in vault
-    for await (let secretProperties of client.listPropertiesOfSecrets()) {
-      let secret = await client.getSecret(secretProperties.name);
-      //set secret to process.env. Because Azure KV does not support underscores, we put the secret names with dashes.  On retrieval we replace dashes with underscore
-      const secretName = [secret.name.replace(/-/g, '_')];
-      process.env[secretName] = secret.value;
-      envVars[secretName] = secret.value;
+    for await (const { name } of client.listPropertiesOfSecrets()) {
+      promises.push(fetchAndSetSecret(client, name));
     }
   }
 
-  if (PRINT_ENV) {
-    console.log(JSON.stringify(envVars));
-  }
+  await Promise.all(promises);
+}
 
-  return {};
+async function fetchAndSetSecret(client, secret_name) {
+  try {
+    const secret = await client.getSecret(secret_name);
+    //set secret to process.env.  Because Azure KV does not support underscores, we put the secret names with dashes.  On retrieval we replace dashes with underscore
+    const secretName = [secret.name.replace(/-/g, '_')];
+    process.env[secretName] = secret.value;
+  } catch (error) {
+    console.warn(error.message);
+  }
 }
