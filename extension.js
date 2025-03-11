@@ -87,11 +87,11 @@ async function fetchAndSetSecrets({ AZURE_VAULT_NAME, AZURE_TENANT_ID, AZURE_CLI
   await Promise.all(promises);
 }
 
-async function fetchAndSetSecret(client, secret_name) {
+async function fetchAndSetSecret(client, secretName) {
   try {
-    const secret = await client.getSecret(secret_name);
+    const secret = await client.getSecret(secretName);
     //set secret to process.env.  Because Azure KV does not support underscores, we put the secret names with dashes.  On retrieval we replace dashes with underscore
-    const secretName = [secret.name.replace(/-/g, '_')];
+    secretName = [secret.name.replace(/-/g, '_')];
     process.env[secretName] = secret.value;
   } catch (error) {
     console.warn(error.message);
